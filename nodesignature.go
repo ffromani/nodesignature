@@ -22,6 +22,11 @@ import (
 	"sort"
 )
 
+type PodIdentificator interface {
+	GetNamespace() string
+	GetName() string
+}
+
 type NodeSignature struct {
 	podIdents []string
 }
@@ -30,8 +35,8 @@ func (ns *NodeSignature) Len() int {
 	return len(ns.podIdents)
 }
 
-func (ns *NodeSignature) AddPod(namespace, name string) error {
-	ns.podIdents = append(ns.podIdents, namespace+"/"+name)
+func (ns *NodeSignature) AddPod(pi PodIdentificator) error {
+	ns.podIdents = append(ns.podIdents, pi.GetNamespace()+"/"+pi.GetName())
 	return nil
 }
 

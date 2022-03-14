@@ -30,6 +30,14 @@ type podIdent struct {
 	Name      string
 }
 
+func (pi podIdent) GetNamespace() string {
+	return pi.Namespace
+}
+
+func (pi podIdent) GetName() string {
+	return pi.Name
+}
+
 var stressPods []podIdent
 
 var pods []podIdent
@@ -74,7 +82,7 @@ func TestSignature(t *testing.T) {
 
 	ns := &NodeSignature{}
 	for _, pod := range pods {
-		ns.AddPod(pod.Namespace, pod.Name)
+		ns.AddPod(pod)
 	}
 	x := ns.Sum()
 	if len(x) == 0 {
@@ -95,11 +103,11 @@ func TestSignatureStable(t *testing.T) {
 
 	ns := &NodeSignature{}
 	for _, pod := range pods {
-		ns.AddPod(pod.Namespace, pod.Name)
+		ns.AddPod(pod)
 	}
 	nsLocal := &NodeSignature{}
 	for _, localPod := range localPods {
-		nsLocal.AddPod(localPod.Namespace, localPod.Name)
+		nsLocal.AddPod(localPod)
 	}
 
 	x := ns.Sum()
@@ -112,7 +120,7 @@ func TestSignatureStable(t *testing.T) {
 func benchHelper() {
 	ns := &NodeSignature{}
 	for _, pod := range pods {
-		ns.AddPod(pod.Namespace, pod.Name)
+		ns.AddPod(pod)
 	}
 	_ = ns.Sum()
 }
@@ -127,7 +135,7 @@ func stressBenchHelper(count int) {
 	ns := &NodeSignature{}
 	for idx := 0; idx < count; idx++ {
 		stressPod := &stressPods[idx]
-		ns.AddPod(stressPod.Namespace, stressPod.Name)
+		ns.AddPod(stressPod)
 	}
 	_ = ns.Sum()
 }
