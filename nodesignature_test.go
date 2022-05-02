@@ -44,9 +44,13 @@ var pods []podIdent
 var podsErr error
 
 const (
-	stressPodsCount    = 8192
-	stressNamespaceLen = 24
-	stressNameLen      = 48
+	maxNodes       = 5000
+	maxPodsPerNode = 250
+)
+
+const (
+	stressNamespaceLen = 52
+	stressNameLen      = 72
 )
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -67,6 +71,7 @@ func init() {
 	}
 	podsErr = json.Unmarshal(data, &pods)
 
+	stressPodsCount := maxNodes * maxPodsPerNode
 	for idx := 0; idx < stressPodsCount; idx++ {
 		stressPods = append(stressPods, podIdent{
 			Namespace: RandStringBytes(stressNamespaceLen),
@@ -117,20 +122,6 @@ func TestSignatureStable(t *testing.T) {
 	}
 }
 
-func benchHelper() {
-	ns := &NodeSignature{}
-	for _, pod := range pods {
-		ns.AddPod(pod)
-	}
-	_ = ns.Sum()
-}
-
-func BenchmarkSignature(b *testing.B) {
-	for n := 0; n < b.N; n++ {
-		benchHelper()
-	}
-}
-
 func stressBenchHelper(count int) {
 	ns := &NodeSignature{}
 	for idx := 0; idx < count; idx++ {
@@ -138,6 +129,12 @@ func stressBenchHelper(count int) {
 		ns.AddPod(stressPod)
 	}
 	_ = ns.Sum()
+}
+
+func BenchmarkSignatureStress128(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		stressBenchHelper(128)
+	}
 }
 
 func BenchmarkSignatureStress256(b *testing.B) {
@@ -152,14 +149,21 @@ func BenchmarkSignatureStress512(b *testing.B) {
 	}
 }
 
-func BenchmarkSignatureStress1024(b *testing.B) {
-	for n := 0; n < b.N; n++ {
-		stressBenchHelper(1024)
+func stressBenchCluster() {
+	var nss []*NodeSignature
+	for nIdx := 0; nIdx < maxNodes; nIdx++ {
+		ns := &NodeSignature{}
+		nss = append(nss, ns)
+		for pIdx := 0; pIdx < maxPodsPerNode; pIdx++ {
+			stressPod := &stressPods[(maxPodsPerNode*nIdx)+pIdx]
+			ns.AddPod(stressPod)
+		}
+		_ = ns.Sum()
 	}
 }
 
-func BenchmarkSignatureStress2048(b *testing.B) {
+func BenchmarkSignatureStressFullCluster(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		stressBenchHelper(2048)
+		stressBenchCluster()
 	}
 }
