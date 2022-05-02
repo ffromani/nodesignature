@@ -17,9 +17,18 @@ limitations under the License.
 package nodesignature
 
 import (
+	"encoding/hex"
 	"sort"
 
 	"github.com/OneOfOne/xxhash"
+)
+
+const (
+	Prefix = "ns"
+
+	Version = "v1"
+
+	Separator = "://"
 )
 
 const (
@@ -63,6 +72,10 @@ func (ns *NodeSignature) Sum() []byte {
 		h.Write(putUint64(b, podHash))
 	}
 	return h.Sum(nil)
+}
+
+func (ns *NodeSignature) Sign() string {
+	return Prefix + Version + Separator + hex.EncodeToString(ns.Sum())
 }
 
 type uvec64 []uint64

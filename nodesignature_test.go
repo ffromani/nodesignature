@@ -80,7 +80,7 @@ func init() {
 	}
 }
 
-func TestSignature(t *testing.T) {
+func TestSum(t *testing.T) {
 	if len(pods) == 0 || podsErr != nil {
 		t.Fatalf("cannot load the test data: %v", podsErr)
 	}
@@ -95,7 +95,7 @@ func TestSignature(t *testing.T) {
 	}
 }
 
-func TestSignatureStable(t *testing.T) {
+func TestSumStable(t *testing.T) {
 	if len(pods) == 0 || podsErr != nil {
 		t.Fatalf("cannot load the test data: %v", podsErr)
 	}
@@ -119,6 +119,33 @@ func TestSignatureStable(t *testing.T) {
 	xLocal := nsLocal.Sum()
 	if !reflect.DeepEqual(x, xLocal) {
 		t.Fatalf("signature not stable: %x vs %x", x, xLocal)
+	}
+}
+
+func TestVerifySign(t *testing.T) {
+	if len(pods) == 0 || podsErr != nil {
+		t.Fatalf("cannot load the test data: %v", podsErr)
+	}
+
+	localPods := make([]podIdent, len(pods))
+	copy(localPods, pods)
+	rand.Shuffle(len(localPods), func(i, j int) {
+		localPods[i], localPods[j] = localPods[j], localPods[i]
+	})
+
+	ns := &NodeSignature{}
+	for _, pod := range pods {
+		ns.AddPod(pod)
+	}
+	nsLocal := &NodeSignature{}
+	for _, localPod := range localPods {
+		nsLocal.AddPod(localPod)
+	}
+
+	x := ns.Sign()
+	xLocal := nsLocal.Sign()
+	if x != xLocal {
+		t.Fatalf("signature not stable: %q vs %q", x, xLocal)
 	}
 }
 
