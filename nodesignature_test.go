@@ -1,18 +1,18 @@
 /*
-Copyright 2022.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright 2022 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package nodesignature
 
@@ -25,26 +25,18 @@ import (
 	"testing"
 )
 
-type podIdent struct {
+type workUnit struct {
 	Namespace string
 	Name      string
 }
 
-func (pi podIdent) GetNamespace() string {
-	return pi.Namespace
-}
+var stressPods []workUnit
 
-func (pi podIdent) GetName() string {
-	return pi.Name
-}
-
-var stressPods []podIdent
-
-var pods []podIdent
+var pods []workUnit
 var podsErr error
 
 const (
-	clusterMaxNodes       = 6000
+	clusterMaxNodes       = 5000
 	clusterMaxPodsPerNode = 300
 )
 
@@ -73,7 +65,7 @@ func init() {
 
 	stressPodsCount := clusterMaxNodes * clusterMaxPodsPerNode
 	for idx := 0; idx < stressPodsCount; idx++ {
-		stressPods = append(stressPods, podIdent{
+		stressPods = append(stressPods, workUnit{
 			Namespace: RandStringBytes(stressNamespaceLen),
 			Name:      RandStringBytes(stressNameLen),
 		})
@@ -87,7 +79,7 @@ func TestSum(t *testing.T) {
 
 	ns := &NodeSignature{}
 	for _, pod := range pods {
-		ns.AddPod(pod)
+		ns.Add(pod.Namespace, pod.Name)
 	}
 	x := ns.Sum()
 	if len(x) == 0 {
@@ -100,7 +92,7 @@ func TestSumStable(t *testing.T) {
 		t.Fatalf("cannot load the test data: %v", podsErr)
 	}
 
-	localPods := make([]podIdent, len(pods))
+	localPods := make([]workUnit, len(pods))
 	copy(localPods, pods)
 	rand.Shuffle(len(localPods), func(i, j int) {
 		localPods[i], localPods[j] = localPods[j], localPods[i]
@@ -108,11 +100,11 @@ func TestSumStable(t *testing.T) {
 
 	ns := &NodeSignature{}
 	for _, pod := range pods {
-		ns.AddPod(pod)
+		ns.Add(pod.Namespace, pod.Name)
 	}
 	nsLocal := &NodeSignature{}
 	for _, localPod := range localPods {
-		nsLocal.AddPod(localPod)
+		nsLocal.Add(localPod.Namespace, localPod.Name)
 	}
 
 	x := ns.Sum()
@@ -127,7 +119,7 @@ func TestVerifySign(t *testing.T) {
 		t.Fatalf("cannot load the test data: %v", podsErr)
 	}
 
-	localPods := make([]podIdent, len(pods))
+	localPods := make([]workUnit, len(pods))
 	copy(localPods, pods)
 	rand.Shuffle(len(localPods), func(i, j int) {
 		localPods[i], localPods[j] = localPods[j], localPods[i]
@@ -135,11 +127,11 @@ func TestVerifySign(t *testing.T) {
 
 	ns := &NodeSignature{}
 	for _, pod := range pods {
-		ns.AddPod(pod)
+		ns.Add(pod.Namespace, pod.Name)
 	}
 	nsLocal := &NodeSignature{}
 	for _, localPod := range localPods {
-		nsLocal.AddPod(localPod)
+		nsLocal.Add(localPod.Namespace, localPod.Name)
 	}
 
 	x := ns.Sign()
@@ -156,7 +148,7 @@ func stressBenchCluster(maxNodes, maxPodsPerNode int) {
 		nss = append(nss, ns)
 		for pIdx := 0; pIdx < maxPodsPerNode; pIdx++ {
 			stressPod := &stressPods[(maxPodsPerNode*nIdx)+pIdx]
-			ns.AddPod(stressPod)
+			ns.Add(stressPod.Namespace, stressPod.Name)
 		}
 		_ = ns.Sum()
 	}

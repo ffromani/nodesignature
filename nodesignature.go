@@ -1,81 +1,127 @@
 /*
-Copyright 2022.
+ * Copyright 2022 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
+// Package nodesignature computes the signature of a working set.
+// A "working set" is a unordered set of namespaced work units
+// running at any given time on a "node". The "signature" is a
+// unique identifer which is bound to that specific working set.
+// This allows to uniquely and concisely identify a workingset
+// without enumerating - and storing - all the names all the time.
+// This concepts maps nicely on kubernetes (but is not limited to):
+// "namespaced work units" = pods and "node" = (kubernetes) nodes.
 package nodesignature
 
 import (
 	"encoding/hex"
+	"fmt"
 	"sort"
 
 	"github.com/OneOfOne/xxhash"
 )
 
 const (
-	Prefix = "ns"
-
-	Version = "v1"
-
-	Separator = "://"
+	// Prefix is the string common to all the signatures
+	// A prefix is always 4 bytes long
+	Prefix = "nsgn"
+	// Version is the version of this signature. You should
+	// only compare compatible versions.
+	// A Version is always 4 bytes long, in the form v\d\d\d
+	Version = "v001"
 )
 
 const (
-	expectedMaxPodsPerNode = 256
+	expectedMaxUnitsPerNode = 256
+
+	expectedPrefixLen  = 4
+	expectedVersionLen = 4
+	minimumSumLen      = 8
 )
 
-type PodIdentificator interface {
-	GetNamespace() string
-	GetName() string
+var (
+	ErrMalformed           = fmt.Errorf("malformed signature")
+	ErrIncompatibleVersion = fmt.Errorf("incompatible version")
+)
+
+func IsVersionCompatible(ver string) (bool, error) {
+	if len(ver) != expectedVersionLen {
+		return false, ErrMalformed
+	}
+	return ver == Version, nil
 }
 
 type NodeSignature struct {
-	podHashes []uint64
+	hashes []uint64
 }
 
 func NewNodeSignature() *NodeSignature {
 	return &NodeSignature{
-		podHashes: make([]uint64, 0, expectedMaxPodsPerNode),
+		hashes: make([]uint64, 0, expectedMaxUnitsPerNode),
 	}
 }
 
 func (ns *NodeSignature) Len() int {
-	return len(ns.podHashes)
+	return len(ns.hashes)
 }
 
-func (ns *NodeSignature) AddPod(pi PodIdentificator) error {
-	ns.podHashes = append(ns.podHashes,
+func (ns *NodeSignature) Add(namespace, name string) error {
+	ns.hashes = append(ns.hashes,
 		xxhash.ChecksumString64S(
-			pi.GetName(),
-			xxhash.ChecksumString64(pi.GetNamespace()),
+			name,
+			xxhash.ChecksumString64(namespace),
 		),
 	)
 	return nil
 }
 
 func (ns *NodeSignature) Sum() []byte {
-	sort.Sort(uvec64(ns.podHashes))
+	sort.Sort(uvec64(ns.hashes))
 	h := xxhash.New64()
 	b := make([]byte, 8)
-	for _, podHash := range ns.podHashes {
-		h.Write(putUint64(b, podHash))
+	for _, hash := range ns.hashes {
+		h.Write(putUint64(b, hash))
 	}
 	return h.Sum(nil)
 }
 
 func (ns *NodeSignature) Sign() string {
-	return Prefix + Version + Separator + hex.EncodeToString(ns.Sum())
+	return Prefix + Version + hex.EncodeToString(ns.Sum())
+}
+
+func (ns *NodeSignature) Check(sign string) error {
+	if len(sign) < expectedPrefixLen+expectedVersionLen+minimumSumLen {
+		return ErrMalformed
+	}
+	pfx := sign[0:4]
+	if pfx != Prefix {
+		return ErrMalformed
+	}
+	ver := sign[4:8]
+	ok, err := IsVersionCompatible(ver)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrIncompatibleVersion
+	}
+	sum := sign[8:]
+	got := hex.EncodeToString(ns.Sum())
+	if got != sum {
+		return fmt.Errorf("signature mismatch got=%q expected=%q", got, sum)
+	}
+	return nil
 }
 
 type uvec64 []uint64
